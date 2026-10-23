@@ -2,15 +2,30 @@ name: Build GalaxyPad IPA
 on: [workflow_dispatch]
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Seleccionar la version mas reciente de Xcode
+        run: |
+          XCODE_APP=$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)
+          echo "Usando Xcode: $XCODE_APP"
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          xcodebuild -version
 
       - name: Preparar herramientas
         run: brew install cmake ninja
 
       - name: Etapa 1 - Dependencias
         run: bash scripts/bootstrap-dependencies.sh
+
+      - name: Parchear HookableEvent.h para compatibilidad con C++
+        run: |
+          FILE="ref/ModernGekko/vendor/dolphin/Source/Core/Common/HookableEvent.h"
+          if [ -f "$FILE" ]; then
+            sed -i '' 's/std::make_unique<Listener>(std::move(callback))/std::unique_ptr<Listener>(new Listener{std::move(callback)})/g' "$FILE"
+            echo "Parche aplicado correctamente en $FILE"
+          fi
 
       - name: Etapa 2 - Runtime (Core)
         run: bash scripts/build-ios-simulator-core.sh
