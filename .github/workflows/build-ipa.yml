@@ -1,0 +1,39 @@
+name: Build GalaxyPad IPA
+on: [workflow_dispatch]
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar herramientas
+        run: brew install cmake ninja
+
+      - name: Etapa 1 - Dependencias
+        run: bash scripts/bootstrap-dependencies.sh
+
+      - name: Etapa 2 - Runtime (Core)
+        run: bash scripts/build-ios-simulator-core.sh
+        env:
+          GALAXYPAD_IOS_SDK: iphoneos
+          GALAXYPAD_BUILD_JOBS: 4
+
+      - name: Etapa 3 - Engine
+        run: bash scripts/build-ios-engine.sh
+        env:
+          GALAXYPAD_IOS_SDK: iphoneos
+          GALAXYPAD_BUILD_JOBS: 4
+
+      - name: Etapa 4 - App
+        run: bash scripts/build-ios-simulator-app.sh
+        env:
+          GALAXYPAD_IOS_SDK: iphoneos
+
+      - name: Etapa 5 - Empaquetado
+        run: bash scripts/package-padmint-ipa.sh GalaxyPad.ipa
+
+      - name: Subir artefacto IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: GalaxyPad-IPA
+          path: GalaxyPad.ipa
