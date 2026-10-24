@@ -1,53 +1,41 @@
 name: Build GalaxyPad IPA
 on: [workflow_dispatch]
+
 jobs:
-  build:
+  ios-build:
     runs-on: macos-15
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-      - name: Seleccionar la version mas reciente de Xcode
+      - name: Install build dependencies
+        run: brew install cmake ninja ripgrep
+
+      - name: Select Xcode 26.3
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app
+
+      - name: Record toolchain
         run: |
-          XCODE_APP=$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)
-          echo "Usando Xcode: $XCODE_APP"
-          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
           xcodebuild -version
+          clang --version
 
-      - name: Preparar herramientas
-        run: brew install cmake ninja
-
-      - name: Etapa 1 - Dependencias
+      - name: Check out pinned Apple build sources
         run: bash scripts/bootstrap-dependencies.sh
 
-      - name: Parchear HookableEvent.h para compatibilidad con C++
+      - name: Build the iOS runtime and app
+        env:
+          GALAXYPAD_IOS_SDK: iphoneos
         run: |
-          FILE="ref/ModernGekko/vendor/dolphin/Source/Core/Common/HookableEvent.h"
-          if [ -f "$FILE" ]; then
-            sed -i '' 's/std::make_unique<Listener>(std::move(callback))/std::unique_ptr<Listener>(new Listener{std::move(callback)})/g' "$FILE"
-            echo "Parche aplicado correctamente en $FILE"
-          fi
+          bash scripts/build-ios-simulator-core.sh
+          bash scripts/build-ios-engine.sh
+          bash scripts/build-ios-simulator-app.sh
 
-      - name: Etapa 2 - Runtime (Core)
-        run: bash scripts/build-ios-simulator-core.sh
-        env:
-          GALAXYPAD_IOS_SDK: iphoneos
-          GALAXYPAD_BUILD_JOBS: 4
-
-      - name: Etapa 3 - Engine
-        run: bash scripts/build-ios-engine.sh
-        env:
-          GALAXYPAD_IOS_SDK: iphoneos
-          GALAXYPAD_BUILD_JOBS: 4
-
-      - name: Etapa 4 - App
-        run: bash scripts/build-ios-simulator-app.sh
-        env:
-          GALAXYPAD_IOS_SDK: iphoneos
-
-      - name: Etapa 5 - Empaquetado
+      - name: Package IPA
         run: bash scripts/package-padmint-ipa.sh GalaxyPad.ipa
 
-      - name: Subir artefacto IPA
+      - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: GalaxyPad-IPA
